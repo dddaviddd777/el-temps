@@ -20,6 +20,8 @@ export const BEACHES = [
   { id: 'palamos', name: 'Platja Gran', short: 'Palamós', town: 'Palamós', lat: 41.8475, lon: 3.1251, facing: 200, open: 50, sea: [41.8475, 3.1211] },
   { id: 'santantoni', name: 'Sant Antoni de Calonge', short: 'Sant Antoni', town: 'Calonge', lat: 41.8394, lon: 3.095, facing: 160, open: 65, sea: [41.8416, 3.1006] },
   { id: 'santfeliu', name: 'Sant Feliu de Guíxols', short: 'Sant Feliu', town: 'Sant Feliu de Guíxols', lat: 41.7792, lon: 3.0292, facing: 150, open: 45, sea: [41.7792, 3.0317] },
+  { id: 'tossa', name: 'Platja Gran de Tossa', short: 'Tossa', town: 'Tossa de Mar', lat: 41.7185, lon: 2.9325, facing: 120, open: 50, sea: [41.7187, 2.9356] },
+  { id: 'lloret', name: 'Platja de Lloret', short: 'Lloret', town: 'Lloret de Mar', lat: 41.6975, lon: 2.8455, facing: 155, open: 55, sea: [41.6974, 2.8501] },
 ];
 
 /** Punt del mapa: uns 150 m mar endins davant de la platja (`sea`, revisat sobre el mapa). */
@@ -38,7 +40,9 @@ const WIND = ['wind_speed_10m', 'wind_direction_10m', 'wind_gusts_10m', 'weather
 
 // ---------- Descàrrega ----------
 export function cachedMarine() {
-  return store.get('marine', null);
+  const c = store.get('marine', null);
+  // Si la llista de platges ha canviat, les dades desades no serveixen.
+  return c && BEACHES.every((b) => c.beaches?.[b.id]) ? c : null;
 }
 
 export async function fetchMarine({ force = false } = {}) {
@@ -119,27 +123,52 @@ export const WAVE_LIMITS = [0.3, 0.8];
 const WIND_LIMITS = { mar: [15, 35], lateral: [20, 38], terra: [25, 40] };
 const GUST_LIMITS = [35, 50];
 
-/** Índex de nedada d'una hora: 0 bo, 1 una mica mogut, 2 mala mar. */
+// Interpolació lineal per trams: pts = [[x, penalització], ...]
+function ramp(x, pts) {
+  if (x <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+    if (x <= x1) return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+  }
+  return pts.at(-1)[1];
+}
+const clamp10 = (v) => Math.max(0, Math.min(10, v));
+
+/**
+ * Índex de nedada d'una hora, de 0 (mala mar) a 10 (perfecte), combinant onada i vent.
+ * Cada factor dona una penalització: 3 punts al llindar de groc i 6 al de vermell.
+ * La pitjor compta sencera i la segona hi suma un terç (onada i vent junts empitjoren el mar).
+ * Semàfor: més de 7 = bo, de 4 a 7 = mogut, 4 o menys = mala mar.
+ */
 export function analyze(beach, h) {
   const bw = beachWave(beach, h);
   const rel = windRelation(beach, h.windDir);
   const why = [];
+  const [w0, w1] = WAVE_LIMITS, [v0, v1] = WIND_LIMITS[rel], [g0, g1] = GUST_LIMITS;
 
-  let wl = 0;
-  if (bw == null) wl = 1;
-  else if (bw >= WAVE_LIMITS[1]) { wl = 2; why.push('onada alta'); }
-  else if (bw >= WAVE_LIMITS[0]) { wl = 1; why.push('una mica d\'onada'); }
+  const pWave = bw == null ? 3 : ramp(bw, [[0.1, 0], [w0, 3], [w1, 6], [w1 + 0.6, 10]]);
+  const pWind = Math.max(
+    ramp(h.wind ?? 0, [[5, 0], [v0, 3], [v1, 6], [v1 + 15, 10]]),
+    ramp(h.gust ?? 0, [[20, 0], [g0, 3], [g1, 6], [g1 + 20, 10]]),
+  );
+  const hi = Math.max(pWave, pWind), lo = Math.min(pWave, pWind);
+  let score = clamp10(10 - hi - lo / 3);
 
-  const s = h.wind ?? 0, g = h.gust ?? 0;
-  const lim = WIND_LIMITS[rel];
-  let vl = s < lim[0] ? 0 : s < lim[1] ? 1 : 2;
-  if (g >= GUST_LIMITS[1]) vl = 2; else if (g >= GUST_LIMITS[0]) vl = Math.max(vl, 1);
-  if (vl === 2) why.push(rel === 'terra' ? 'vent fort de terra (et pot allunyar)' : 'vent fort');
-  else if (vl === 1) why.push(rel === 'mar' ? 'vent de mar' : 'vent moderat');
+  if (pWave >= 6) why.push('onada alta'); else if (pWave >= 3) why.push('una mica d\x27onada');
+  if (pWind >= 6) why.push(rel === 'terra' ? 'vent fort de terra (et pot allunyar)' : 'vent fort');
+  else if (pWind >= 3) why.push(rel === 'mar' ? 'vent de mar' : 'vent moderat');
+  if (h.code >= 95) { score = 0; why.push('tempesta'); }
 
-  let level = Math.max(wl, vl);
-  if (h.code >= 95) { level = 2; why.push('tempesta'); }
-  return { level, beachHs: bw, rel, why };
+  const levelOf = (sc) => (sc > 7 ? 0 : sc > 4 ? 1 : 2);
+  if (!why.length && levelOf(score) > 0) why.push('onada i vent junts');
+  return {
+    level: levelOf(score),
+    score: Math.round(score * 10) / 10,
+    waveScore: Math.round(clamp10(10 - pWave)),
+    windScore: Math.round(clamp10(10 - pWind)),
+    windLevel: levelOf(10 - pWind),
+    beachHs: bw, rel, why,
+  };
 }
 
 // ---------- Hores locals ----------
@@ -170,8 +199,8 @@ export function bestWindow(beach, hours, day, len = 2) {
     if (win[len - 1].t - win[0].t !== (len - 1) * 3600) continue;
     const an = win.map((h) => analyze(beach, h));
     const level = Math.max(...an.map((a) => a.level));
-    const score = level * 100 + an.reduce((s, a, k) => s + (a.beachHs ?? 1) * 20 + (win[k].wind ?? 0) / 2, 0);
-    if (!best || score < best.score) best = { start: win[0].t, end: win[len - 1].t + 3600, level, score, hs: an[0].beachHs, wind: win[0].wind, rel: an[0].rel };
+    const score = level * 100 - an.reduce((s, a) => s + a.score, 0); // menys és millor
+    if (!best || score < best.score) best = { start: win[0].t, end: win[len - 1].t + 3600, level, score, index: Math.min(...an.map((a) => a.score)), hs: an[0].beachHs, wind: win[0].wind, rel: an[0].rel };
   }
   return best;
 }

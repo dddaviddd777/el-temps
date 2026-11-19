@@ -71,6 +71,8 @@ De nord a sud. L'orientació és aproximada i la confirmarem amb el mapa.
 | Platja Gran de Palamós | Palamós | S-SO |
 | Sant Antoni de Calonge | Calonge | SE |
 | Sant Feliu de Guíxols | Sant Feliu | SE |
+| Platja Gran de Tossa | Tossa de Mar | E-SE |
+| Platja de Lloret | Lloret de Mar | SE |
 
 Una sola petició a Open-Meteo porta totes les platges de cop. Per a cada platja agafarem un punt **una mica mar endins** (uns centenars de metres), perquè el model d'onades no doni "terra".
 

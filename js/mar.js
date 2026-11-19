@@ -114,7 +114,7 @@ function initMap() {
     maxZoom: 17,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
-  L.control.zoom({ position: 'topright' }).addTo(map);
+  L.control.zoom({ position: 'topleft' }).addTo(map);
   map.fitBounds(L.latLngBounds(BEACHES.map((b) => seaPoint(b))), { padding: [24, 24], paddingBottomRight: [90, 24] });
   for (const b of BEACHES) {
     markers[b.id] = L.marker(seaPoint(b), { keyboard: true, title: b.name, riseOnHover: true })
@@ -126,11 +126,11 @@ function initMap() {
 }
 
 // Mida de cada etiqueta (cercle + nom + fletxa del vent), per poder-les col·locar sense que es trepitgin.
-const PILL_H = 28, R = PILL_H / 2;
+const PILL_H = 24, R = PILL_H / 2, WIND_W = 40; // WIND_W: amplada de la pastilla del vent
 const measureCtx = document.createElement('canvas').getContext('2d');
 function pillWidth(b) {
-  measureCtx.font = '500 12.5px Outfit, system-ui, sans-serif';
-  return PILL_H + 6 + measureCtx.measureText(b.short).width + 4 + 13 + 8;
+  measureCtx.font = '500 12px Outfit, system-ui, sans-serif';
+  return PILL_H + 6 + measureCtx.measureText(b.short).width + 6 + WIND_W + 3;
 }
 
 /**
@@ -139,7 +139,7 @@ function pillWidth(b) {
  */
 function layoutLabels() {
   const size = map.getSize();
-  const LEAD = 14, GAP = 4; // el cercle surt una mica cap al mar des del punt de la platja
+  const LEAD = 12, GAP = 3; // el cercle surt una mica cap al mar des del punt de la platja
   const all = BEACHES.map((b) => {
     const p = map.latLngToContainerPoint(seaPoint(b));
     const f = (b.facing * Math.PI) / 180;
@@ -162,16 +162,23 @@ function layoutLabels() {
         if (oy < ox * 2) { const s = (A.y < B.y || (A.y === B.y && i < j) ? -1 : 1) * oy / 2; A.y += s; B.y -= s; }
         else { const s = (A.x < B.x ? -1 : 1) * ox / 2; A.x += s; B.x -= s; }
       }
-      // Que no tapi el punt d'una altra platja.
-      for (const o of items) {
-        if (o === A) continue;
-        const r = rect(A);
-        if (o.p.x > r.l - 5 && o.p.x < r.r + 5 && o.p.y > r.t - 5 && o.p.y < r.b + 5) A.y += (A.y < o.p.y ? -1 : 1) * 2;
-      }
       // Dins del mapa, i la costa queda a l'oest: l'etiqueta no passa a l'esquerra del seu punt (no se'n va terra endins).
       A.x = Math.max(Math.min(A.x, size.x - A.w + R - 4), A.p.x - 4);
       A.y = Math.min(Math.max(A.y, R + 4), size.y - R - 18);
     }
+  }
+  // Repàs final: de dalt a baix, cap etiqueta en trepitja cap altra (si cal, la baixem).
+  const hOverlap = (A, B) => Math.min(rect(A).r, rect(B).r) - Math.max(rect(A).l, rect(B).l) + GAP > 0;
+  const sorted = [...items].sort((a, b) => a.y - b.y);
+  sorted.forEach((B, i) => {
+    for (const A of sorted.slice(0, i)) if (hOverlap(A, B) && B.y < A.y + PILL_H + GAP) B.y = A.y + PILL_H + GAP;
+  });
+  // I si la de baix surt del mapa, pugem la columna.
+  const bottom = size.y - R - 18;
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const B = sorted[i];
+    if (B.y > bottom) B.y = bottom;
+    for (const C of sorted.slice(i + 1)) if (hOverlap(B, C) && B.y > C.y - PILL_H - GAP) B.y = C.y - PILL_H - GAP;
   }
   return Object.fromEntries(all.map((a) => [a.id, { dx: a.x - a.p.x, dy: a.y - a.p.y }]));
 }
@@ -186,8 +193,10 @@ function renderMarkers() {
     const { dx, dy } = off[b.id];
     const html = `<div class="bm ${selected === b.id ? 'sel' : ''}" style="--c:${LEVELS[a.level].color}">
         <span class="pill" style="left:${(dx - R).toFixed(1)}px;top:${(dy - R).toFixed(1)}px">
-          <b>${a.beachHs == null ? '—' : m(a.beachHs)}</b>${b.short}
-          <svg class="arr" viewBox="0 0 18 18" style="transform:rotate(${rot}deg)" aria-hidden="true"><path d="M9 1l5 12-5-3-5 3z"/></svg>
+          <b title="Onada a la platja">${a.beachHs == null ? '—' : m(a.beachHs)}</b>${b.short}
+          <span class="wind" style="--w:${LEVELS[a.windLevel].color}" title="Vent ${REL[a.rel]}">
+            <svg viewBox="0 0 18 18" style="transform:rotate(${rot}deg)" aria-hidden="true"><path d="M9 1l5 12-5-3-5 3z"/></svg>${h.wind == null ? '—' : Math.round(h.wind)}
+          </span>
         </span></div>`;
     markers[b.id].setIcon(L.divIcon({ className: 'bm-wrap', html, iconSize: [0, 0], iconAnchor: [0, 0] }));
   }
@@ -267,7 +276,7 @@ function renderDetail() {
     const w = bestWindow(b, hours, dayKeyOffset(off));
     const lbl = off ? 'Demà' : 'Avui';
     if (!w) return `<div>${lbl}<b>Franja passada</b></div>`;
-    return `<div><i style="background:${LEVELS[w.level].color}"></i>${lbl}, millor<b>${winText(w)}</b>${LEVELS[w.level].short} · ${m(w.hs)} m · ${w.wind == null ? '—' : Math.round(w.wind)} km/h</div>`;
+    return `<div><i style="background:${LEVELS[w.level].color}"></i>${lbl}, millor<b>${winText(w)}</b>Índex ${nf1.format(w.index)} · ${m(w.hs)} m · ${w.wind == null ? '—' : Math.round(w.wind)} km/h</div>`;
   }).join('');
 
   const swDir = h.swDir ?? h.dir;
@@ -282,9 +291,14 @@ function renderDetail() {
 
   $('dBody').innerHTML = `
     <div class="d-now">
-      <div class="lvl" style="background:${LEVELS[a.level].color}">${a.beachHs == null ? '—' : m(a.beachHs)}</div>
+      <div class="lvl score" style="background:${LEVELS[a.level].color}" aria-label="Índex de nedada ${nf1.format(a.score)} sobre 10">${nf1.format(a.score)}<small>/10</small></div>
       <p><b>${LEVELS[a.level].label}</b> · ${dayLabel(h.t)} ${hhmm(h.t)}<br>${sentence(b, h, a)}
         ${a.why.length ? `<small>Per: ${a.why.join(', ')}.</small>` : ''}</p>
+    </div>
+    <div class="d-score">
+      ${scoreBar('Onada', a.waveScore)}
+      ${scoreBar('Vent', a.windScore)}
+      <p>Índex de nedada de 0 a 10: combina l'onada a la platja amb el vent i les ratxes. Compta sobretot el pitjor dels dos, i si tots dos fallen alhora baixa encara més. Més de 7 = bo · de 4 a 7 = mogut · 4 o menys = mala mar.</p>
     </div>
     <div class="d-windows">${wins}</div>
     <div class="d-h">Pròximes 48 hores</div>
@@ -298,6 +312,11 @@ function renderDetail() {
   sc.scrollLeft = Math.max(0, x);
 }
 
+function scoreBar(label, v) {
+  const c = LEVELS[v > 7 ? 0 : v > 4 ? 1 : 2].color;
+  return `<div class="sb"><span>${label}</span><i><b style="width:${v * 10}%;background:${c}"></b></i><em>${v}/10</em></div>`;
+}
+
 function chart(b, hours) {
   const from = nowIdx, to = Math.min(hours.length, nowIdx + 48);
   const hs = hours.slice(from, to);
@@ -309,7 +328,8 @@ function chart(b, hours) {
     const p = localParts(h.t);
     if (from + i === idx) out += `<rect x="${x + 1}" y="0" width="${W - 2}" height="${H}" rx="6" fill="rgba(255,255,255,.1)"/>`;
     if (p.hour === 0 && i) out += `<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="rgba(255,255,255,.25)" stroke-dasharray="3 3"/>`;
-    out += `<rect x="${x + 2}" y="4" width="${W - 4}" height="8" rx="3" fill="${lv}"/>`;
+    out += `<rect x="${x + 2}" y="2" width="${W - 4}" height="17" rx="5" fill="${lv}"/>`;
+    out += `<text x="${cx}" y="14.5" fill="#0b1d2c" font-size="11" font-weight="600" text-anchor="middle">${Math.round(a.score)}</text>`;
     // onada mar endins (contorn) i a la platja (ple)
     if (h.hs != null) out += `<rect x="${cx - 9}" y="${base - sc(h.hs)}" width="18" height="${sc(h.hs)}" rx="3" fill="none" stroke="rgba(168,220,255,.45)" stroke-dasharray="2 2"/>`;
     if (a.beachHs != null) {
@@ -326,6 +346,7 @@ function chart(b, hours) {
   });
   return `<svg width="${hs.length * W}" height="${H}" viewBox="0 0 ${hs.length * W} ${H}" role="img" aria-label="Onada i vent per hores">${out}</svg>
     <div class="legend" style="padding:6px 8px 0">
+      <span>A dalt: índex de nedada (0-10)</span>
       <span><i style="background:#a8dcff"></i>Onada a la platja (m)</span>
       <span><i style="background:none;border:1px dashed rgba(168,220,255,.7)"></i>Mar obert</span>
       <span>Fletxa: vent <b style="color:#9be7b4">de terra</b> / <b style="color:#ffb46b">de mar</b> · km/h i ratxes</span>
