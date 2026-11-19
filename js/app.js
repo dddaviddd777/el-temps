@@ -2,6 +2,7 @@ import { fetchForecast } from './data.js';
 import { describe, iconSvg, skyTheme, windName, uvLevel, rainIntensity } from './weather.js';
 import { getPosition, geoErrorText, reverseName, searchPlaces } from './location.js';
 import * as store from './store.js';
+import { fetchMarine, cachedMarine, summary as seaSummary, LEVELS } from './marine.js';
 
 const $ = (id) => document.getElementById(id);
 const main = $('main');
@@ -171,6 +172,7 @@ function render() {
       </div>
       <div class="now-icon">${iconSvg(c.code, c.isDay, 112)}</div>
     </section>
+    <a class="card sea-card" href="mar.html" id="seaCard">${seaCardInner(cachedMarine())}</a>
     ${nowcastCard()}
     <section class="card">
       <h2>Pròximes 24 hores <span>${esc(fc.source)}</span></h2>
@@ -189,6 +191,23 @@ function render() {
   $('foot').innerHTML = `Dades: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a> (CC BY 4.0) · model AROME de Météo-France a Catalunya<br>
     Noms de lloc: © OpenStreetMap · Les dades oficials de Meteocat s'hi afegiran quan arribi la clau`;
   renderUpdated();
+  fetchMarine().then((d) => { const el = $('seaCard'); if (el) el.innerHTML = seaCardInner(d); }).catch(() => {});
+}
+
+function seaCardInner(d) {
+  const wave = '<span class="wave"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M2 9c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M2 14c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2M2 19c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/></svg></span>';
+  const arrow = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>';
+  let line = 'Estat del mar per nedar a la Costa Brava';
+  if (d) {
+    try {
+      const s = seaSummary(d);
+      const water = s.sst != null ? ` · aigua ${Math.round(s.sst)}°` : '';
+      line = s.best
+        ? `<i class="lvl" style="background:${LEVELS[s.best.w.level].color}"></i>${s.dayLabel}: millor a ${esc(s.best.b.name)} de ${hh(s.best.w.start)} a ${hh(s.best.w.end)} h${water}`
+        : `Previsió de mar no disponible${water}`;
+    } catch { /* dades incompletes: deixem el text per defecte */ }
+  }
+  return `${wave}<span class="txt"><b>Mar · Costa Brava</b><span>${line}</span></span>${arrow}`;
 }
 
 function banner(html, raw = false) {
