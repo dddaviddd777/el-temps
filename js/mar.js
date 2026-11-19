@@ -139,7 +139,7 @@ function pillWidth(b) {
  */
 function layoutLabels() {
   const size = map.getSize();
-  const LEAD = 22, GAP = 4;
+  const LEAD = 14, GAP = 4; // el cercle surt una mica cap al mar des del punt de la platja
   const all = BEACHES.map((b) => {
     const p = map.latLngToContainerPoint(seaPoint(b));
     const f = (b.facing * Math.PI) / 180;
@@ -185,8 +185,6 @@ function renderMarkers() {
     const rot = ((h.windDir ?? 0) + 180) % 360;
     const { dx, dy } = off[b.id];
     const html = `<div class="bm ${selected === b.id ? 'sel' : ''}" style="--c:${LEVELS[a.level].color}">
-        <svg class="lead" width="1" height="1"><line x1="0" y1="0" x2="${dx.toFixed(1)}" y2="${dy.toFixed(1)}"/></svg>
-        <i class="pt"></i>
         <span class="pill" style="left:${(dx - R).toFixed(1)}px;top:${(dy - R).toFixed(1)}px">
           <b>${a.beachHs == null ? '—' : m(a.beachHs)}</b>${b.short}
           <svg class="arr" viewBox="0 0 18 18" style="transform:rotate(${rot}deg)" aria-hidden="true"><path d="M9 1l5 12-5-3-5 3z"/></svg>
