@@ -328,29 +328,61 @@ function detailCards() {
     ${sunCard()}`;
 }
 
+function duration(sec) {
+  const m = Math.max(1, Math.round(sec / 60));
+  const h = Math.floor(m / 60);
+  return h ? `${h} h ${m % 60} min` : `${m} min`;
+}
+
+// Icona de sortida (fletxa amunt) o posta (fletxa avall): mig sol sobre l'horitzó.
+function sunEventIcon(up) {
+  const col = up ? '#ffd34d' : '#ff9a4d';
+  const arrow = up ? 'M12 2v6M9 5l3-3 3 3' : 'M12 2v6M9 5l3 3 3-3';
+  return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M5 18a7 7 0 0 1 14 0z" fill="${col}"/><path d="M2 18h20" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="${arrow}" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
 function sunCard() {
   const d0 = fc.daily[0], d1 = fc.daily[1];
   if (!d0) return '';
   const now = Date.now() / 1000;
+  const before = now < d0.sunrise, after = now > d0.sunset, during = !before && !after;
   const p = Math.max(0, Math.min(1, (now - d0.sunrise) / (d0.sunset - d0.sunrise)));
+
+  // Arc del sol: de l'horitzó esquerre (sortida) al dret (posta)
+  const X0 = 34, X1 = 266, Y = 84, TOP = -6;
   const P = (t) => {
     const a = (1 - t) ** 2, b = 2 * (1 - t) * t, c = t * t;
-    return [a * 20 + b * 150 + c * 280, a * 70 + b * -20 + c * 70];
+    return [a * X0 + b * 150 + c * X1, a * Y + b * TOP + c * Y];
   };
-  const steps = Math.max(1, Math.round(p * 30));
+  const steps = Math.max(1, Math.round(p * 40));
   const done = Array.from({ length: steps + 1 }, (_, i) => P((i / steps) * p).map((v) => v.toFixed(1)).join(' ')).join(' L');
   const [sx, sy] = P(p);
-  const after = now > d0.sunset;
-  const right = after && d1 ? `Sortida demà ${hhmm(d1.sunrise)}` : `Posta ${hhmm(d0.sunset)}`;
+
+  let status;
+  if (during) status = `La posta serà d'aquí <b>${duration(d0.sunset - now)}</b>`;
+  else if (before) status = `El sol sortirà d'aquí <b>${duration(d0.sunrise - now)}</b>`;
+  else status = `El sol es va pondre fa ${duration(now - d0.sunset)}${d1 ? ` · demà surt a les <b>${hhmm(d1.sunrise)}</b>` : ''}`;
+
   const dayLen = Math.round((d0.sunset - d0.sunrise) / 60);
-  return `<section class="card wide"><h2>Sol <span>${Math.floor(dayLen / 60)} h ${dayLen % 60} min de llum</span></h2>
-    <svg viewBox="0 0 300 80" width="100%" height="80" aria-hidden="true">
-      <path d="M20 70 Q150 -20 280 70" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="2" stroke-dasharray="4 4"/>
-      ${p > 0 ? `<path d="M${done}" fill="none" stroke="#ffd34d" stroke-width="3" stroke-linecap="round"/>` : ''}
-      ${!after && now > d0.sunrise ? `<circle cx="${sx}" cy="${sy}" r="7" fill="#ffd34d"/>` : ''}
-      <line x1="8" y1="70" x2="292" y2="70" stroke="rgba(255,255,255,.3)"/>
+  const nextIsRise = before, nextIsSet = during;
+
+  return `<section class="card wide sun"><h2>Sol <span>${Math.floor(dayLen / 60)} h ${dayLen % 60} min de llum</span></h2>
+    <p class="sun-status">${status}</p>
+    <svg viewBox="0 0 300 96" style="display:block;width:100%;height:auto;max-height:150px" aria-hidden="true">
+      <defs><linearGradient id="sunArc" x1="0" x2="1"><stop offset="0" stop-color="#ffd34d"/><stop offset="1" stop-color="#ff9a4d"/></linearGradient></defs>
+      <path d="M${X0} ${Y} Q150 ${TOP} ${X1} ${Y}" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="2" stroke-dasharray="4 5"/>
+      ${p > 0 ? `<path d="M${done}" fill="none" stroke="url(#sunArc)" stroke-width="3.5" stroke-linecap="round"/>` : ''}
+      <line x1="6" y1="${Y}" x2="294" y2="${Y}" stroke="rgba(255,255,255,.4)"/>
+      <circle cx="${X0}" cy="${Y}" r="5" fill="#ffd34d" ${before ? '' : 'opacity=".55"'}/>
+      <circle cx="${X1}" cy="${Y}" r="5" fill="#ff9a4d" ${after ? 'opacity=".55"' : ''}/>
+      ${during ? `<circle cx="${sx}" cy="${sy}" r="12" fill="#ffd34d" opacity=".25"/><circle cx="${sx}" cy="${sy}" r="7.5" fill="#ffd34d"/>` : ''}
     </svg>
-    <div style="display:flex;justify-content:space-between" class="sub"><span>Sortida ${hhmm(d0.sunrise)}</span><span>${right}</span></div>
+    <div class="sun-times">
+      <div class="${nextIsRise ? 'next' : ''}">${sunEventIcon(true)}<div><small>Sortida</small><strong>${hhmm(d0.sunrise)}</strong></div></div>
+      <div class="${nextIsSet ? 'next' : ''}"><div><small>Posta</small><strong>${hhmm(d0.sunset)}</strong></div>${sunEventIcon(false)}</div>
+    </div>
   </section>`;
 }
 
