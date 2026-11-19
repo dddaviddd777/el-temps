@@ -5,21 +5,29 @@ import * as store from './store.js';
 /**
  * Platges. `facing`: direcció (graus) cap on mira la platja, és a dir, d'on li pot arribar el mar.
  * `open`: mitja obertura del sector de mar obert (graus). Valors aproximats, a calibrar.
+ * `sea`: punt on es dibuixa al mapa, uns 150 m mar endins.
  */
 export const BEACHES = [
-  { id: 'montgo', name: 'Cala Montgó', town: "L'Escala", lat: 42.1055, lon: 3.1665, facing: 140, open: 40 },
-  { id: 'estartit', name: "L'Estartit", town: 'Torroella de Montgrí', lat: 42.0371, lon: 3.1954, facing: 100, open: 65 },
-  { id: 'sariera', name: 'Sa Riera', town: 'Begur', lat: 41.973, lon: 3.2109, facing: 35, open: 50 },
-  { id: 'satuna', name: 'Sa Tuna', town: 'Begur', lat: 41.9588, lon: 3.2324, facing: 90, open: 40 },
-  { id: 'aiguablava', name: 'Aiguablava', town: 'Begur', lat: 41.9341, lon: 3.2161, facing: 80, open: 40 },
-  { id: 'tamariu', name: 'Tamariu', town: 'Palafrugell', lat: 41.9176, lon: 3.2074, facing: 100, open: 45 },
-  { id: 'llafranc', name: 'Llafranc', town: 'Palafrugell', lat: 41.8935, lon: 3.1936, facing: 165, open: 45 },
-  { id: 'calella', name: 'Calella de Palafrugell', town: 'Palafrugell', lat: 41.887, lon: 3.183, facing: 150, open: 50 },
-  { id: 'fosca', name: 'La Fosca', town: 'Palamós', lat: 41.857, lon: 3.1428, facing: 160, open: 45 },
-  { id: 'palamos', name: 'Platja Gran', town: 'Palamós', lat: 41.8475, lon: 3.1251, facing: 200, open: 50 },
-  { id: 'santantoni', name: 'Sant Antoni de Calonge', town: 'Calonge', lat: 41.8394, lon: 3.095, facing: 160, open: 65 },
-  { id: 'santfeliu', name: 'Sant Feliu de Guíxols', town: 'Sant Feliu de Guíxols', lat: 41.7792, lon: 3.0292, facing: 150, open: 45 },
+  { id: 'montgo', name: 'Cala Montgó', short: 'Montgó', town: "L'Escala", lat: 42.1055, lon: 3.1665, facing: 80, open: 40, sea: [42.1071, 3.1706] },
+  { id: 'estartit', name: "L'Estartit", short: "L'Estartit", town: 'Torroella de Montgrí', lat: 42.0371, lon: 3.1954, facing: 100, open: 65, sea: [42.0368, 3.1972] },
+  { id: 'sariera', name: 'Sa Riera', short: 'Sa Riera', town: 'Begur', lat: 41.973, lon: 3.2109, facing: 35, open: 50, sea: [41.9739, 3.2123] },
+  { id: 'satuna', name: 'Sa Tuna', short: 'Sa Tuna', town: 'Begur', lat: 41.9588, lon: 3.2324, facing: 55, open: 40, sea: [41.9614, 3.2318] },
+  { id: 'aiguablava', name: 'Aiguablava', short: 'Aiguablava', town: 'Begur', lat: 41.9341, lon: 3.2161, facing: 80, open: 40, sea: [41.9345, 3.2178] },
+  { id: 'tamariu', name: 'Tamariu', short: 'Tamariu', town: 'Palafrugell', lat: 41.9176, lon: 3.2074, facing: 100, open: 45, sea: [41.9172, 3.2095] },
+  { id: 'llafranc', name: 'Llafranc', short: 'Llafranc', town: 'Palafrugell', lat: 41.8935, lon: 3.1936, facing: 165, open: 45, sea: [41.8927, 3.1953] },
+  { id: 'calella', name: 'Calella de Palafrugell', short: 'Calella', town: 'Palafrugell', lat: 41.887, lon: 3.183, facing: 150, open: 50, sea: [41.887, 3.1835] },
+  { id: 'fosca', name: 'La Fosca', short: 'La Fosca', town: 'Palamós', lat: 41.857, lon: 3.1428, facing: 160, open: 45, sea: [41.8574, 3.1445] },
+  { id: 'palamos', name: 'Platja Gran', short: 'Palamós', town: 'Palamós', lat: 41.8475, lon: 3.1251, facing: 200, open: 50, sea: [41.8475, 3.1211] },
+  { id: 'santantoni', name: 'Sant Antoni de Calonge', short: 'Sant Antoni', town: 'Calonge', lat: 41.8394, lon: 3.095, facing: 160, open: 65, sea: [41.8416, 3.1006] },
+  { id: 'santfeliu', name: 'Sant Feliu de Guíxols', short: 'Sant Feliu', town: 'Sant Feliu de Guíxols', lat: 41.7792, lon: 3.0292, facing: 150, open: 45, sea: [41.7792, 3.0317] },
 ];
+
+/** Punt del mapa: uns 150 m mar endins davant de la platja (`sea`, revisat sobre el mapa). */
+export function seaPoint(b) {
+  if (b.sea) return b.sea;
+  const f = (b.facing * Math.PI) / 180;
+  return [b.lat + (150 * Math.cos(f)) / 111320, b.lon + (150 * Math.sin(f)) / (111320 * Math.cos((b.lat * Math.PI) / 180))];
+}
 
 export const TZ = 'Europe/Madrid';
 const TTL = 60 * 60 * 1000; // els models d'onades s'actualitzen poques vegades al dia: n'hi ha prou amb 1 h
@@ -37,7 +45,7 @@ export async function fetchMarine({ force = false } = {}) {
   const cached = cachedMarine();
   if (!force && cached && Date.now() - cached.fetchedAt < TTL) return cached;
   const lat = BEACHES.map((b) => b.lat).join(','), lon = BEACHES.map((b) => b.lon).join(',');
-  const common = `latitude=${lat}&longitude=${lon}&timezone=${encodeURIComponent(TZ)}&timeformat=unixtime&forecast_days=3&cell_selection=sea`;
+  const common = `latitude=${lat}&longitude=${lon}&timezone=${encodeURIComponent(TZ)}&timeformat=unixtime&forecast_days=4&cell_selection=sea`;
   const [m, w] = await Promise.all([
     getJson(`https://marine-api.open-meteo.com/v1/marine?${common}&hourly=${MARINE.join(',')}`),
     getJson(`https://api.open-meteo.com/v1/forecast?${common}&wind_speed_unit=kmh&hourly=${WIND.join(',')}`),
@@ -101,11 +109,17 @@ export function beachWave(beach, h) {
 
 export const LEVELS = [
   { label: 'Bo per nedar', short: 'Bo', color: '#3ccf7a' },
-  { label: 'Acceptable', short: 'Acceptable', color: '#f5c542' },
-  { label: 'No recomanable', short: 'No recomanable', color: '#ef5b5b' },
+  { label: 'Una mica mogut', short: 'Mogut', color: '#f5c542' },
+  { label: 'Mala mar', short: 'Mala mar', color: '#ef5b5b' },
 ];
 
-/** Índex de nedada d'una hora: 0 bo, 1 acceptable, 2 no recomanable. */
+// Llindars (a calibrar). Onada a la platja: verd < 0,3 m · groc 0,3–0,8 m · vermell ≥ 0,8 m.
+export const WAVE_LIMITS = [0.3, 0.8];
+// Vent sostingut (km/h) per passar a groc i a vermell segons d'on bufa. El vermell és només per a vent fort de debò.
+const WIND_LIMITS = { mar: [15, 35], lateral: [20, 38], terra: [25, 40] };
+const GUST_LIMITS = [35, 50];
+
+/** Índex de nedada d'una hora: 0 bo, 1 una mica mogut, 2 mala mar. */
 export function analyze(beach, h) {
   const bw = beachWave(beach, h);
   const rel = windRelation(beach, h.windDir);
@@ -113,13 +127,13 @@ export function analyze(beach, h) {
 
   let wl = 0;
   if (bw == null) wl = 1;
-  else if (bw >= 0.8) { wl = 2; why.push('onada alta'); }
-  else if (bw >= 0.4) { wl = 1; why.push('una mica d\'onada'); }
+  else if (bw >= WAVE_LIMITS[1]) { wl = 2; why.push('onada alta'); }
+  else if (bw >= WAVE_LIMITS[0]) { wl = 1; why.push('una mica d\'onada'); }
 
   const s = h.wind ?? 0, g = h.gust ?? 0;
-  const lim = rel === 'mar' ? [12, 20] : rel === 'lateral' ? [15, 25] : [18, 28];
+  const lim = WIND_LIMITS[rel];
   let vl = s < lim[0] ? 0 : s < lim[1] ? 1 : 2;
-  if (g >= 35) vl = 2; else if (g >= 28) vl = Math.max(vl, 1);
+  if (g >= GUST_LIMITS[1]) vl = 2; else if (g >= GUST_LIMITS[0]) vl = Math.max(vl, 1);
   if (vl === 2) why.push(rel === 'terra' ? 'vent fort de terra (et pot allunyar)' : 'vent fort');
   else if (vl === 1) why.push(rel === 'mar' ? 'vent de mar' : 'vent moderat');
 

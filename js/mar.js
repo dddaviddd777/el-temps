@@ -1,4 +1,4 @@
-import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow } from './marine.js';
+import { BEACHES, TZ, fetchMarine, cachedMarine, analyze, bestWindow, LEVELS, localParts, dayKeyOffset, swimWindow, seaPoint } from './marine.js';
 import { windName } from './weather.js';
 import * as store from './store.js';
 
@@ -79,8 +79,29 @@ function renderAll() {
 function renderTime() {
   const t = data.times[idx];
   $('timeLabel').textContent = `${dayLabel(t)} · ${hhmm(t)}`;
+  renderChips();
   renderMarkers();
   renderList();
+}
+
+// Botons ràpids: ara, demà a les 9 h i demà passat a les 9 h (l'hora habitual de nedar).
+const SWIM_HOUR = 9;
+function jumpIndex(j) {
+  if (j === 'now') return nowIdx;
+  const day = dayKeyOffset(Number(j));
+  const k = data.times.findIndex((t) => { const p = localParts(t); return p.day === day && p.hour === SWIM_HOUR; });
+  return k >= nowIdx ? k : -1;
+}
+function renderChips() {
+  const chips = [['now', 'Ara']];
+  for (const off of [1, 2]) {
+    const k = jumpIndex(String(off));
+    if (k < 0) continue;
+    const name = off === 1 ? 'Demà' : cap(fmt({ weekday: 'long' }).format(data.times[k] * 1000));
+    chips.push([String(off), `${name} ${SWIM_HOUR} h`]);
+  }
+  document.querySelector('.chips').innerHTML = chips
+    .map(([j, txt]) => `<button data-jump="${j}" class="${jumpIndex(j) === idx ? 'on' : ''}">${txt}</button>`).join('');
 }
 
 function initMap() {
@@ -94,24 +115,83 @@ function initMap() {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
   L.control.zoom({ position: 'topright' }).addTo(map);
-  map.fitBounds(L.latLngBounds(BEACHES.map((b) => [b.lat, b.lon])), { padding: [20, 20] });
+  map.fitBounds(L.latLngBounds(BEACHES.map((b) => seaPoint(b))), { padding: [24, 24], paddingBottomRight: [90, 24] });
   for (const b of BEACHES) {
-    markers[b.id] = L.marker([b.lat, b.lon], { keyboard: true, title: b.name, riseOnHover: true })
+    markers[b.id] = L.marker(seaPoint(b), { keyboard: true, title: b.name, riseOnHover: true })
       .on('click', () => openDetail(b.id))
       .addTo(map);
   }
+  map.on('zoomend resize', () => renderMarkers());
+  document.fonts?.ready.then(() => renderMarkers());
+}
+
+// Mida de cada etiqueta (cercle + nom + fletxa del vent), per poder-les col·locar sense que es trepitgin.
+const PILL_H = 28, R = PILL_H / 2;
+const measureCtx = document.createElement('canvas').getContext('2d');
+function pillWidth(b) {
+  measureCtx.font = '500 12.5px Outfit, system-ui, sans-serif';
+  return PILL_H + 6 + measureCtx.measureText(b.short).width + 4 + 13 + 8;
+}
+
+/**
+ * Col·loca les etiquetes: cadascuna surt del seu punt cap al mar (segons cap on mira la platja)
+ * i, si se'n trepitgen dues, se separen. Retorna el desplaçament (px) de cada etiqueta respecte del seu punt.
+ */
+function layoutLabels() {
+  const size = map.getSize();
+  const LEAD = 22, GAP = 4;
+  const all = BEACHES.map((b) => {
+    const p = map.latLngToContainerPoint(seaPoint(b));
+    const f = (b.facing * Math.PI) / 180;
+    const d = { x: p.x + Math.sin(f) * LEAD, y: p.y - Math.cos(f) * LEAD };
+    return { id: b.id, p, d, x: d.x, y: d.y, w: pillWidth(b) };
+  });
+  // Només col·loquem les que es veuen; les de fora de la pantalla es queden a la seva posició natural.
+  const items = all.filter((a) => a.p.x > -20 && a.p.x < size.x + 20 && a.p.y > -20 && a.p.y < size.y + 20);
+  const rect = (a) => ({ l: a.x - R, r: a.x - R + a.w, t: a.y - R, b: a.y + R });
+  for (let k = 0; k < 260; k++) {
+    if (k < 200) for (const a of items) { a.x += (a.d.x - a.x) * 0.04; a.y += (a.d.y - a.y) * 0.04; }
+    for (let i = 0; i < items.length; i++) {
+      const A = items[i], ra = rect(A);
+      for (let j = i + 1; j < items.length; j++) {
+        const B = items[j], rb = rect(B);
+        const ox = Math.min(ra.r, rb.r) - Math.max(ra.l, rb.l) + GAP;
+        const oy = Math.min(ra.b, rb.b) - Math.max(ra.t, rb.t) + GAP;
+        if (ox <= 0 || oy <= 0) continue;
+        // Preferim separar-les en vertical (la costa va de nord a sud i les etiquetes són amples).
+        if (oy < ox * 2) { const s = (A.y < B.y || (A.y === B.y && i < j) ? -1 : 1) * oy / 2; A.y += s; B.y -= s; }
+        else { const s = (A.x < B.x ? -1 : 1) * ox / 2; A.x += s; B.x -= s; }
+      }
+      // Que no tapi el punt d'una altra platja.
+      for (const o of items) {
+        if (o === A) continue;
+        const r = rect(A);
+        if (o.p.x > r.l - 5 && o.p.x < r.r + 5 && o.p.y > r.t - 5 && o.p.y < r.b + 5) A.y += (A.y < o.p.y ? -1 : 1) * 2;
+      }
+      // Dins del mapa, i la costa queda a l'oest: l'etiqueta no passa a l'esquerra del seu punt (no se'n va terra endins).
+      A.x = Math.max(Math.min(A.x, size.x - A.w + R - 4), A.p.x - 4);
+      A.y = Math.min(Math.max(A.y, R + 4), size.y - R - 18);
+    }
+  }
+  return Object.fromEntries(all.map((a) => [a.id, { dx: a.x - a.p.x, dy: a.y - a.p.y }]));
 }
 
 function renderMarkers() {
-  if (!map) return;
+  if (!map || !data) return;
+  const off = layoutLabels();
   for (const b of BEACHES) {
     const h = data.beaches[b.id][idx];
     const a = analyze(b, h);
     const rot = ((h.windDir ?? 0) + 180) % 360;
+    const { dx, dy } = off[b.id];
     const html = `<div class="bm ${selected === b.id ? 'sel' : ''}" style="--c:${LEVELS[a.level].color}">
-        <svg class="arr" viewBox="0 0 18 18" style="transform:rotate(${rot}deg)"><path d="M9 1l5 12-5-3-5 3z" fill="#fff" stroke="#0b1d2c" stroke-width="1"/></svg>
-        ${a.beachHs == null ? '—' : m(a.beachHs)}</div>`;
-    markers[b.id].setIcon(L.divIcon({ className: 'bm-wrap', html, iconSize: [34, 34], iconAnchor: [17, 17] }));
+        <svg class="lead" width="1" height="1"><line x1="0" y1="0" x2="${dx.toFixed(1)}" y2="${dy.toFixed(1)}"/></svg>
+        <i class="pt"></i>
+        <span class="pill" style="left:${(dx - R).toFixed(1)}px;top:${(dy - R).toFixed(1)}px">
+          <b>${a.beachHs == null ? '—' : m(a.beachHs)}</b>${b.short}
+          <svg class="arr" viewBox="0 0 18 18" style="transform:rotate(${rot}deg)" aria-hidden="true"><path d="M9 1l5 12-5-3-5 3z"/></svg>
+        </span></div>`;
+    markers[b.id].setIcon(L.divIcon({ className: 'bm-wrap', html, iconSize: [0, 0], iconAnchor: [0, 0] }));
   }
 }
 
@@ -161,7 +241,7 @@ function openDetail(id) {
   $('detail').hidden = false;
   renderDetail();
   renderMarkers();
-  if (map) { const b = BEACHES.find((x) => x.id === id); map.panTo([b.lat, b.lon]); }
+  if (map) map.panTo(seaPoint(BEACHES.find((x) => x.id === id)));
 }
 function closeDetail() { $('detail').hidden = true; selected = null; renderMarkers(); }
 
@@ -264,12 +344,8 @@ $('time').addEventListener('input', (e) => {
 document.querySelector('.chips').addEventListener('click', (e) => {
   const j = e.target.closest('[data-jump]')?.dataset.jump;
   if (!j || !data) return;
-  if (j === 'now') idx = nowIdx;
-  else {
-    const day = dayKeyOffset(1);
-    const k = data.times.findIndex((t) => { const p = localParts(t); return p.day === day && p.hour === 7; });
-    if (k >= 0) idx = k;
-  }
+  const k = jumpIndex(j);
+  if (k >= 0) idx = k;
   $('time').value = idx;
   renderTime();
   if (selected) renderDetail();

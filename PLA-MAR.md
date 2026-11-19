@@ -34,13 +34,17 @@ Els models d'onades tenen cel·les de 5 a 25 km: no "veuen" que una cala està a
 
 Per a cada platja guardarem la **direcció cap on mira** i l'**angle que té obert al mar**, i amb això l'app calcularà un **índex de nedada** per hores.
 
-### Semàfor per nedar (llindars inicials, a ajustar amb la vostra experiència)
+### Semàfor per nedar (revisat el 20/11/2026 amb els vostres criteris)
 
-| | Onada a la platja | Vent | Altres |
+El vermell vol dir mala mar de debò; el vent sol, si no és fort, només arriba a groc.
+
+| | Onada a la platja | Vent sostingut | Ratxes |
 |---|---|---|---|
-| 🟢 **Bo** | < 0,4 m | < 12 km/h, o de terra | — |
-| 🟡 **Acceptable** | 0,4 – 0,8 m | 12 – 20 km/h | ratxes < 30 km/h |
-| 🔴 **No recomanable** | > 0,8 m | > 20 km/h de mar | ratxes > 30 km/h, tempesta o avís |
+| 🟢 **Bo** | < 0,3 m | de mar < 15 · lateral < 20 · de terra < 25 km/h | < 35 km/h |
+| 🟡 **Una mica mogut** | 0,3 – 0,8 m | de mar 15–35 · lateral 20–38 · de terra 25–40 km/h | 35–50 km/h |
+| 🔴 **Mala mar** | ≥ 0,8 m | de mar ≥ 35 · lateral ≥ 38 · de terra ≥ 40 km/h | ≥ 50 km/h, o tempesta |
+
+Els llindars són a `js/marine.js` (`WAVE_LIMITS`, `WIND_LIMITS`, `GUST_LIMITS`).
 
 "Onada a la platja" = onada prevista mar endins × factor d'exposició de la platja segons d'on ve l'onada.
 
@@ -80,7 +84,7 @@ Una sola petició a Open-Meteo porta totes les platges de cop. Per a cada platja
 
 **En tocar-la, la pantalla "Mar":**
 1. **Mapa de la Costa Brava** (de l'Escala a Sant Feliu) amb un punt per platja pintat amb el semàfor, una fletxa per al vent i una altra per a l'onada.
-2. **Barra de temps** a sota del mapa, com la del Windy: arrossegant-la es veu com canvia el semàfor hora a hora (ara, 6 h, 9 h, 12 h… fins a 3 dies).
+2. **Barra de temps** a sota del mapa, com la del Windy: arrossegant-la es veu com canvia el semàfor hora a hora (ara, 6 h, 9 h, 12 h… fins a 4 dies), amb botons ràpids "Demà 9 h" i "demà passat 9 h".
 3. **Llista de platges** ordenada per com estan ara, amb la millor franja d'avui.
 4. **Fitxa de platja** (en tocar-ne una):
    - frase resum i millor franja d'avui i de demà;

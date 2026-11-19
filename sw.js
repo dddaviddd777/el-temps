@@ -1,6 +1,6 @@
 // Service worker: permet obrir l'app sense connexió.
 // Les dades del temps NO es guarden aquí (les desa l'app amb la seva hora), només els fitxers de l'app.
-const VERSION = 'temps-v3';
+const VERSION = 'temps-v4';
 const SHELL = [
   './', 'index.html', 'mar.html', 'css/style.css', 'css/mar.css', 'manifest.webmanifest',
   'js/app.js', 'js/data.js', 'js/weather.js', 'js/location.js', 'js/store.js', 'js/marine.js', 'js/mar.js',
