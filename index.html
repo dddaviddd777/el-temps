@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>El Temps</title>
+<meta name="description" content="El temps allà on siguis, amb dades oficials.">
+<meta name="theme-color" content="#3f8fe0">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-sky="clear">
+<div class="sky" aria-hidden="true"></div>
+<div class="ptr" id="ptr" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg></div>
+
+<div class="app">
+  <header class="top">
+    <button class="place" id="placeBtn" aria-label="Canviar de lloc">
+      <span class="pin" id="pin"></span>
+      <span class="pname" id="pname">El Temps</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="actions">
+      <button class="icon-btn" id="installBtn" hidden aria-label="Instal·lar l'app" title="Instal·lar l'app">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      </button>
+      <button class="icon-btn" id="refreshBtn" aria-label="Actualitzar" title="Actualitzar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
+      </button>
+    </div>
+  </header>
+  <div class="updated" id="updated">&nbsp;</div>
+  <main id="main">
+    <div class="loading"><div class="spinner"></div><p>Buscant on ets…</p></div>
+  </main>
+  <footer class="foot" id="foot"></footer>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Llocs">
+    <div class="sheet-head">
+      <input id="search" type="search" placeholder="Cerca un municipi…" autocomplete="off" enterkeyhint="search">
+      <button class="icon-btn dark" id="closeSheet" aria-label="Tancar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p class="sheet-msg" id="sheetMsg" hidden></p>
+    <ul class="plist" id="results"></ul>
+    <h3 class="plist-title">Llocs</h3>
+    <ul class="plist" id="places"></ul>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
