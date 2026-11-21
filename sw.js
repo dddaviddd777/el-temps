@@ -1,9 +1,9 @@
 // Service worker: permet obrir l'app sense connexió.
 // Les dades del temps NO es guarden aquí (les desa l'app amb la seva hora), només els fitxers de l'app.
-const VERSION = 'temps-v6';
+const VERSION = 'temps-v7';
 const SHELL = [
-  './', 'index.html', 'mar.html', 'css/style.css', 'css/mar.css', 'manifest.webmanifest',
-  'js/app.js', 'js/data.js', 'js/weather.js', 'js/location.js', 'js/store.js', 'js/marine.js', 'js/mar.js',
+  './', 'index.html', 'css/style.css', 'manifest.webmanifest',
+  'js/app.js', 'js/data.js', 'js/weather.js', 'js/location.js', 'js/store.js',
   'icons/icon-192.png', 'icons/icon-512.png',
 ];
 
@@ -23,8 +23,7 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const sameOrigin = url.origin === self.location.origin;
   const isFont = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
-  const isLib = url.hostname === 'cdnjs.cloudflare.com'; // Leaflet (el mapa)
-  if (!sameOrigin && !isFont && !isLib) return; // les APIs del temps van sempre a la xarxa
+  if (!sameOrigin && !isFont) return; // les APIs del temps van sempre a la xarxa
 
   // Primer la xarxa (per tenir sempre la darrera versió); si no n'hi ha, la còpia desada.
   e.respondWith(
