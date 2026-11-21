@@ -19,7 +19,7 @@ export async function fetchOpenMeteo(lat, lon, { signal } = {}) {
   const p = new URLSearchParams({
     latitude: String(lat), longitude: String(lon),
     timezone: 'auto', timeformat: 'unixtime', wind_speed_unit: 'kmh',
-    forecast_days: '8', past_hours: '3', forecast_hours: '27',
+    forecast_days: '8', past_hours: '3', forecast_hours: '28',
     past_minutely_15: '1', forecast_minutely_15: '10',
     current: CURRENT.join(','), minutely_15: 'precipitation',
     hourly: HOURLY.join(','), daily: DAILY.join(','),
@@ -35,9 +35,12 @@ function normalize(j) {
   const now = Date.now() / 1000;
   const c = j.current, H = j.hourly, D = j.daily, M = j.minutely_15;
 
+  // Open-Meteo dona la pluja de cada hora (quantitat i probabilitat) com la de l'hora que ACABA en aquell moment:
+  // el valor de les 18:00 és el de 17 a 18 h. A l'app, cada hora vol dir l'hora que comença (18:00 = de 18 a 19 h),
+  // així que agafem el valor de l'hora següent (també el codi del temps, que es calcula amb aquesta pluja).
   const hourly = H.time.map((t, i) => ({
-    t, temp: n(H.temperature_2m[i]), pop: n(H.precipitation_probability?.[i]), mm: n(H.precipitation[i]) ?? 0,
-    code: H.weather_code[i], isDay: !!H.is_day[i], wind: n(H.wind_speed_10m[i]), gust: n(H.wind_gusts_10m[i]),
+    t, temp: n(H.temperature_2m[i]), pop: n(H.precipitation_probability?.[i + 1]), mm: n(H.precipitation[i + 1]) ?? 0,
+    code: H.weather_code[i + 1] ?? H.weather_code[i], isDay: !!H.is_day[i], wind: n(H.wind_speed_10m[i]), gust: n(H.wind_gusts_10m[i]),
     dir: n(H.wind_direction_10m[i]), pressure: n(H.pressure_msl[i]),
   }));
   let idx = hourly.findLastIndex((h) => h.t <= now);
@@ -45,9 +48,11 @@ function normalize(j) {
   const pNow = hourly[idx]?.pressure, pPrev = hourly[idx - 3]?.pressure;
   const pressureTrend = pNow != null && pPrev != null ? pNow - pPrev : null;
 
+  // Igual amb els trams de 15 min: el valor de les 18:45 és el de 18:30 a 18:45. Guardem l'hora d'inici del tram
+  // i només els trams que encara no s'han acabat.
   const nowcast = (M?.time || [])
-    .map((t, i) => ({ t, mm: n(M.precipitation[i]) ?? 0 }))
-    .filter((s) => s.t > now - 900)
+    .map((t, i) => ({ t: t - 900, mm: n(M.precipitation[i]) ?? 0 }))
+    .filter((s) => s.t + 900 > now)
     .slice(0, 8);
 
   const daily = D.time.map((t, i) => ({
@@ -56,6 +61,16 @@ function normalize(j) {
     sunrise: D.sunrise[i], sunset: D.sunset[i], uv: n(D.uv_index_max[i]),
     windMax: n(D.wind_speed_10m_max[i]), gustMax: n(D.wind_gusts_10m_max[i]),
   }));
+
+  // "Avui": la probabilitat i la pluja de la resta del dia, no de les hores que ja han passat.
+  if (daily.length > 1) {
+    const rest = hourly.slice(idx).filter((h) => h.t < daily[1].t && h.pop != null);
+    if (rest.length) {
+      daily[0].pop = Math.max(...rest.map((h) => h.pop));
+      daily[0].mm = rest.reduce((a, h) => a + h.mm, 0);
+      daily[0].code = Math.max(...rest.map((h) => h.code)); // el més sever, com fa Open-Meteo per al dia
+    }
+  }
 
   return {
     source: 'Open-Meteo',

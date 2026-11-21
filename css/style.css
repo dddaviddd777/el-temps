@@ -76,6 +76,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .banner button { text-decoration: underline; color: var(--ink); }
 
 .nowcast p { font-size: 15px; margin-bottom: 10px; }
+.nowcast p small { display: block; font-size: 13px; color: var(--soft); margin-top: 4px; }
 .ncbar { display: flex; gap: 3px; height: 30px; align-items: flex-end; }
 .ncbar i { flex: 1; background: var(--rain); border-radius: 2px; }
 .nclab { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); margin-top: 4px; }

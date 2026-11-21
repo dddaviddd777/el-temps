@@ -201,7 +201,12 @@ function nowcastCard() {
   const wet = (s) => s.mm >= 0.1;
   const first = nc.findIndex(wet);
   let text;
-  if (first === -1) text = 'No es preveu pluja les pròximes 2 hores';
+  if (first === -1) {
+    text = 'No es preveu pluja les pròximes 2 hores';
+    // El detall de 15 min diu que no plourà aquí, però la probabilitat horària de la zona pot no ser zero.
+    const pop = Math.max(0, ...fc.hourly.slice(0, 2).map((h) => h.pop ?? 0));
+    if (pop >= 20) text += `<small>La probabilitat de pluja a la zona és del ${pop} %: com a molt, algun ruixat aïllat.</small>`;
+  }
   else {
     const peak = Math.max(...nc.map((s) => s.mm));
     const kind = rainIntensity(peak);
