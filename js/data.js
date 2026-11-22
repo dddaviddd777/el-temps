@@ -20,7 +20,7 @@ export async function fetchOpenMeteo(lat, lon, { signal } = {}) {
     latitude: String(lat), longitude: String(lon),
     timezone: 'auto', timeformat: 'unixtime', wind_speed_unit: 'kmh',
     forecast_days: '8', past_hours: '3', forecast_hours: '28',
-    past_minutely_15: '1', forecast_minutely_15: '10',
+    past_minutely_15: '1', forecast_minutely_15: '13',
     current: CURRENT.join(','), minutely_15: 'precipitation',
     hourly: HOURLY.join(','), daily: DAILY.join(','),
   });
@@ -53,7 +53,7 @@ function normalize(j) {
   const nowcast = (M?.time || [])
     .map((t, i) => ({ t: t - 900, mm: n(M.precipitation[i]) ?? 0 }))
     .filter((s) => s.t + 900 > now)
-    .slice(0, 8);
+    .slice(0, 12); // 3 hores en trams de 15 min
 
   const daily = D.time.map((t, i) => ({
     t, code: D.weather_code[i], max: n(D.temperature_2m_max[i]), min: n(D.temperature_2m_min[i]),

@@ -195,36 +195,83 @@ function banner(html, raw = false) {
   return `<section class="card banner"><svg width="20" height="20" viewBox="0 0 24 24" fill="#ffcc33" style="flex:none"><path d="M12 2L1 21h22L12 2zm1 15h-2v2h2v-2zm0-7h-2v5h2v-5z"/></svg><div>${raw ? html : esc(html)}</div></section>`;
 }
 
+// ---------- Pluja de les pròximes 12 hores ----------
+// Les primeres ~2 hores en trams de 15 min (quan és útil saber quan comença o para) i la resta per hores,
+// amb la probabilitat. Tot plegat en una sola barra de temps i una frase que ho resumeix.
+const RAIN_HOURS = 12;
+
+function rainTimeline() {
+  const nc = fc.nowcast || [], hours = fc.hourly || [];
+  const start = nc[0]?.t ?? hours[0]?.t;
+  if (start == null) return null;
+  const end = start + RAIN_HOURS * 3600;
+  const popAt = (t) => hours.find((h) => t >= h.t && t < h.t + 3600)?.pop ?? null;
+  // Fins a l'hora en punt que hi ha passades unes 2 hores (com a molt fins on arriben les dades de 15 min).
+  const cut = nc.length ? Math.min(nc.at(-1).t + 900, Math.ceil((start + 2 * 3600) / 3600) * 3600) : start;
+  const segs = [];
+  for (const q of nc) if (q.t < cut) segs.push({ t: q.t, dur: 900, mmh: q.mm * 4, pop: popAt(q.t), fine: true });
+  for (const h of hours) if (h.t >= cut && h.t < end) segs.push({ t: h.t, dur: 3600, mmh: h.mm, pop: h.pop, fine: false });
+  // Pluja "segura": el model en dona en aquell tram (i, per hores, amb una probabilitat raonable).
+  for (const g of segs) g.wet = g.fine ? g.mmh >= 0.4 : g.mmh >= 0.1 && (g.pop ?? 100) >= 40;
+  return { segs, start, end: segs.length ? segs.at(-1).t + segs.at(-1).dur : end, cut };
+}
+
+// "a les 18:00", "cap a les 18:00", "demà a les 04:00", "demà cap a les 04:00"
+function rainWhen(t, cap = false) {
+  const day = (x) => fmt({ day: 'numeric' }).format(x * 1000);
+  return `${day(t) !== day(Date.now() / 1000) ? 'demà ' : ''}${cap ? 'cap ' : ''}a les ${hhmm(t)}`;
+}
+
+function rainSentence(segs) {
+  const i0 = segs.findIndex((g) => g.wet);
+  if (i0 === -1) {
+    let text = `Sense pluja les pròximes ${RAIN_HOURS} hores`;
+    const top = segs.reduce((m, g) => ((g.pop ?? 0) > (m?.pop ?? 0) ? g : m), null);
+    if (top && top.pop >= 20) text += `<small>Probabilitat màxima del ${top.pop} % ${rainWhen(top.t)}: com a molt, algun ruixat aïllat.</small>`;
+    return text;
+  }
+  const j = segs.findIndex((g, k) => k > i0 && !g.wet);
+  const run = segs.slice(i0, j === -1 ? undefined : j);
+  const kind = rainIntensity(Math.max(...run.map((g) => g.mmh)) / 4);
+  const pops = run.filter((g) => !g.fine && g.pop != null).map((g) => g.pop);
+  const prob = pops.length ? ` (probabilitat ${Math.max(...pops)} %)` : '';
+  const stop = j === -1 ? null : segs[j].t;
+  const main = i0 === 0
+    ? (stop ? `Pluja ${kind} ara; para ${rainWhen(stop, true)}` : `Pluja ${kind} durant les pròximes ${RAIN_HOURS} hores${prob}`)
+    : `Sense pluja fins ${rainWhen(segs[i0].t)}. Després, pluja ${kind}${prob}${stop ? `, fins ${rainWhen(stop, true)}` : ''}`;
+  // I després d'aquest episodi, torna a ploure?
+  if (j === -1) return main;
+  const rest = segs.slice(j);
+  const again = rest.find((g) => g.wet);
+  if (again) return `${main}<small>Torna a ploure ${rainWhen(again.t)}${again.pop != null && !again.fine ? ` (${again.pop} %)` : ''}.</small>`;
+  const top = rest.reduce((m, g) => ((g.pop ?? 0) > (m?.pop ?? 0) ? g : m), null);
+  if (top && top.pop >= 30) return `${main}<small>Més tard, possibles ruixats (probabilitat fins al ${top.pop} % ${rainWhen(top.t)}).</small>`;
+  return main;
+}
+
 function nowcastCard() {
-  const nc = fc.nowcast;
-  if (!nc?.length) return '';
-  const wet = (s) => s.mm >= 0.1;
-  const first = nc.findIndex(wet);
-  let text;
-  if (first === -1) {
-    text = 'No es preveu pluja les pròximes 2 hores';
-    // El detall de 15 min diu que no plourà aquí, però la probabilitat horària de la zona pot no ser zero.
-    const pop = Math.max(0, ...fc.hourly.slice(0, 2).map((h) => h.pop ?? 0));
-    if (pop >= 20) text += `<small>La probabilitat de pluja a la zona és del ${pop} %: com a molt, algun ruixat aïllat.</small>`;
-  }
-  else {
-    const peak = Math.max(...nc.map((s) => s.mm));
-    const kind = rainIntensity(peak);
-    if (first === 0) {
-      const stop = nc.findIndex((s, i) => i > 0 && !wet(s));
-      text = stop === -1 ? `Pluja ${kind} durant les pròximes 2 hores` : `Pluja ${kind} fins cap a les ${hhmm(nc[stop].t)}`;
-    } else text = `Pluja ${kind} a partir de les ${hhmm(nc[first].t)}`;
-  }
-  const bars = nc.map((s) => {
-    const h = Math.min(100, (s.mm * 4) / 8 * 100);
-    return `<i style="height:${Math.max(h, 6)}%;opacity:${wet(s) ? 0.95 : 0.22}" title="${hhmm(s.t)} · ${nf1.format(s.mm * 4)} mm/h"></i>`;
+  const tl = rainTimeline();
+  if (!tl || !tl.segs.length) return '';
+  const { segs, start, end, cut } = tl;
+  const span = end - start;
+  const bars = segs.map((g) => {
+    const h = g.mmh > 0 ? Math.max(8, Math.min(100, (g.mmh / 4) * 100)) : 0;
+    const pop = !g.fine && g.pop ? `<em style="height:${g.pop}%"></em>` : '';
+    const tip = `${hhmm(g.t)} · ${nf1.format(g.mmh)} mm/h${g.pop != null && !g.fine ? ` · ${g.pop} %` : ''}`;
+    return `<span style="flex:${g.dur / 900}" title="${tip}">${pop}<b style="height:${h}%;opacity:${g.wet ? 0.95 : 0.45}"></b></span>`;
   }).join('');
-  const labIdx = [0, 2, 4, nc.length - 1].filter((i, k, a) => i < nc.length && a.indexOf(i) === k);
+  // Etiquetes: "Ara" i cada 3 hores en punt.
+  const labs = [`<span style="left:0">Ara</span>`];
+  for (let t = Math.ceil((start + 1800) / 10800) * 10800; t < end - 1800; t += 10800) {
+    labs.push(`<span style="left:${((t - start) / span) * 100}%">${hhmm(t)}</span>`);
+  }
+  const cutPct = ((cut - start) / span) * 100;
   return `<section class="card nowcast">
-    <h2>Pluja pròximes 2 h <span>passos de 15 min</span></h2>
-    <p>${text}</p>
-    <div class="ncbar">${bars}</div>
-    <div class="nclab">${labIdx.map((i) => `<span>${i === 0 ? 'Ara' : hhmm(nc[i].t)}</span>`).join('')}</div>
+    <h2>Pluja pròximes ${RAIN_HOURS} h <span>${cut > start ? '15 min, després hores' : 'per hores'}</span></h2>
+    <p>${rainSentence(segs)}</p>
+    <div class="ncbar">${bars}${cut > start && cut < end ? `<i class="nccut" style="left:${cutPct}%"></i>` : ''}</div>
+    <div class="nclab">${labs.join('')}</div>
+    <div class="nckey"><span><b></b>Pluja prevista (mm/h)</span><span><em></em>Probabilitat (per hores)</span></div>
   </section>`;
 }
 
